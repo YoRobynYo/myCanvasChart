@@ -5,6 +5,9 @@ A crypto trading chart built with [TradeCanvas](https://github.com/bonguynvan/tr
 `ChartWidget`: symbol search, a watchlist with live quotes, indicators (EMA 50 and RSI 14 to
 start) and the drawing tools, in the dark theme. No API key is needed.
 
+
+Live: https://tradecanvas.dev/starters/crypto/
+
 ![The crypto terminal: BTCUSDT on 15-minute candles with EMA 50, RSI and a watchlist](docs/screenshot.png)
 
 ## Run it
@@ -30,7 +33,7 @@ Or try it without installing anything:
 - `src/main.ts` creates the widget: the Binance adapter, the pairs the symbol search opens
   with, the watchlist's two lists, and the indicators added once the chart is ready.
 - `src/style.css` gives the widget its size (it fills the window).
-- `.github/workflows/pages.yml` publishes the app on GitHub Pages on every push to `main`
+- `.github/workflows/pages.yml` publishes your copy on GitHub Pages on every push to `main`
   (turn it on once under Settings > Pages > Source: GitHub Actions).
 
 ## Use your own data
