@@ -2,8 +2,8 @@ import { defineIndicator } from '@tradecanvas/chart';
 
 const ictBaseTest = defineIndicator({
   id: 'ict-base-test',
-  name: 'ICT Base — TEST',
-  shortName: 'ICT Base TEST',
+  name: 'ICT Base — TEST-RM',
+  shortName: 'ICT Base TEST-RM',
   placement: 'overlay',
   category: { id: 'ict-layers', label: 'ICT Layers' },
   inputs: {
