@@ -1,6 +1,7 @@
 import './style.css';
 import { BinanceAdapter, type SymbolInfo } from '@tradecanvas/chart';
 import { ChartWidget } from '@tradecanvas/chart/widget';
+import { ictBaseTest } from './ictBase';
 
 // The pairs the symbol search opens with. With names, kinds and exchanges the
 // search shows them in rows with tabs; plain tickers ('BTCUSDT') work too.
@@ -39,8 +40,9 @@ const widget = new ChartWidget(container, {
     ],
   },
   // Runs once the chart is built. Indicators and the drawing sidebar are on by
-  // default; these two are only a starting point (Indicators button to add more).
+  // by default; these two are only a starting point (Indicators button to add more).
   onReady: (chart, w) => {
+    chart.registerIndicator(ictBaseTest);
     chart.addIndicator('ema', { period: 50 });
     chart.addIndicator('rsi', { period: 14 });
     if (window.innerWidth >= WIDE_SCREEN_PX) w.openPanel('watchlist');
