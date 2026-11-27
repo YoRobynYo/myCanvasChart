@@ -1,5 +1,10 @@
 import './style.css';
-import { BinanceAdapter, type SymbolInfo } from '@tradecanvas/chart';
+import {
+  BinanceAdapter,
+  overlayScale,
+  type OverlayPlugin,
+  type SymbolInfo,
+} from '@tradecanvas/chart';
 import { ChartWidget } from '@tradecanvas/chart/widget';
 
 // The pairs the symbol search opens with. With names, kinds and exchanges the
@@ -19,9 +24,54 @@ const PAIRS: SymbolInfo[] = [
 
 // The watchlist panel takes room beside the chart: open it only on screens wide enough.
 const WIDE_SCREEN_PX = 1024;
-
 const container = document.getElementById('chart');
 if (!container) throw new Error('index.html needs an element with id="chart"');
+
+// A visible, price-anchored proof that an ICT layer can render text on the chart.
+// The label follows the latest visible candle as the user pans or zooms.
+let baseLayerEnabled = false;
+let dropdownObserver: MutationObserver | undefined;
+const baseLayerOverlay: OverlayPlugin = {
+  descriptor: {
+    id: 'ict-base-layer-test',
+    name: 'ICT Base Layer Test',
+    layer: 'overlay',
+  },
+  enabled: false,
+  render(ctx, context) {
+    if (!this.enabled || context.data.length === 0) return;
+
+    const scale = overlayScale(context);
+    if (scale.visible.to < scale.visible.from) return;
+
+    const index = Math.min(Math.floor(scale.visible.to), context.data.length - 1);
+    const bar = context.data[index];
+    if (!bar) return;
+
+    const label = 'ICT BASE';
+    const x = scale.indexToX(index);
+    const highY = scale.priceToY(bar.high);
+    const boxHeight = 20;
+
+    ctx.save();
+    ctx.font = '600 11px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    const boxWidth = Math.ceil(ctx.measureText(label).width + 14);
+    const left = x - boxWidth - 8;
+    const top = Math.max(2, highY - boxHeight - 6);
+
+    ctx.fillStyle = 'rgba(8, 18, 14, 0.94)';
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1;
+    ctx.fillRect(left, top, boxWidth, boxHeight);
+    ctx.strokeRect(left, top, boxWidth, boxHeight);
+    ctx.fillStyle = '#10b981';
+    ctx.fillText(label, left + 7, top + boxHeight / 2);
+    ctx.restore();
+  },
+};
 
 const widget = new ChartWidget(container, {
   // Binance's public market data: history over REST, live bars over a WebSocket.
@@ -43,10 +93,54 @@ const widget = new ChartWidget(container, {
   onReady: (chart, w) => {
     chart.addIndicator('ema', { period: 50 });
     chart.addIndicator('rsi', { period: 14 });
+    chart.plugins.register({ kind: 'overlay', plugin: baseLayerOverlay });
+
+    const ictDropdown = w.addToolbarDropdown({
+      id: 'ict-layers',
+      label: 'ICT Layers',
+      text: 'ICT Layers',
+      icon: 'layers',
+      side: 'right',
+      items: () => [
+        {
+          label: 'Base Layer — Test',
+          checked: baseLayerEnabled,
+          onSelect: () => {
+            baseLayerEnabled = !baseLayerEnabled;
+            baseLayerOverlay.enabled = baseLayerEnabled;
+            chart.requestRender();
+          },
+        },
+      ],
+    });
+
+    if (ictDropdown) {
+      // The widget's public API creates a native toolbar dropdown. Place that
+      // native control immediately before the built-in Unnamed/layout control.
+      const layoutButton = container.querySelector('[data-role="layouts"]');
+      layoutButton?.before(ictDropdown.element);
+
+      // Scope the active-green menu-row styling to ICT Layers only.
+      dropdownObserver = new MutationObserver(() => {
+        container.classList.toggle(
+          'ict-layers-menu-open',
+          ictDropdown.element.getAttribute('aria-expanded') === 'true',
+        );
+      });
+      dropdownObserver.observe(ictDropdown.element, {
+        attributes: true,
+        attributeFilter: ['aria-expanded'],
+      });
+    }
+
     if (window.innerWidth >= WIDE_SCREEN_PX) w.openPanel('watchlist');
   },
 });
 
 // Vite hot reload: drop the old widget (its WebSocket, listeners and DOM)
 // before the edited module makes a new one.
-import.meta.hot?.dispose(() => widget.destroy());
+import.meta.hot?.dispose(() => {
+  dropdownObserver?.disconnect();
+  container.classList.remove('ict-layers-menu-open');
+  widget.destroy();
+});

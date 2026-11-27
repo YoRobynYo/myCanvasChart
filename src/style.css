@@ -11,3 +11,19 @@ body {
   height: 100dvh; /* the visible height on phones, under the browser's bars */
   width: 100%;
 }
+
+/* Match the built-in Unnamed/layout dropdown's text-button treatment. */
+#chart .tcw-host-btn[data-host-button='ict-layers']::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-inline-start: 3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+/* Checked ICT layer text turns green while its menu is open. */
+#chart.ict-layers-menu-open .tcw-context-item[aria-checked='true'] .tcw-context-label {
+  color: #10b981;
+}
