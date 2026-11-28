@@ -2,6 +2,7 @@ import { overlayScale, type OverlayPlugin } from '@tradecanvas/chart';
 import {
   analyzeSupplyDemand,
   type Candle,
+  type SupplyDemandOptions,
   type SupplyDemandZone,
   type ZonePhase,
 } from './supply-demand.ts';
@@ -98,7 +99,9 @@ function drawZone(
   drawTag(ctx, ACTIVE_PHASES[zone.phase], anchorX + 5, anchorY, colors.text);
 }
 
-export function createSupplyDemandOverlay(): OverlayPlugin {
+export function createSupplyDemandOverlay(
+  layerOptions: Partial<SupplyDemandOptions> = {},
+): OverlayPlugin {
   return {
     descriptor: {
       id: 'ict-3-supply-demand',
@@ -112,7 +115,7 @@ export function createSupplyDemandOverlay(): OverlayPlugin {
       if (scale.visible.to < scale.visible.from) return;
 
       const candles = context.data as readonly Candle[];
-      const zones = selectVisibleZones(analyzeSupplyDemand(candles));
+      const zones = selectVisibleZones(analyzeSupplyDemand(candles, layerOptions));
       const latestBySide = new Map<SupplyDemandZone['side'], SupplyDemandZone>();
       for (const zone of zones) {
         if (zone.phase !== 'invalidated') latestBySide.set(zone.side, zone);

@@ -74,7 +74,7 @@ const baseLayerOverlay: OverlayPlugin = {
     ctx.restore();
   },
 };
-const ict3SupplyDemandOverlay = createSupplyDemandOverlay();
+const ict3SupplyDemandOverlay = createSupplyDemandOverlay({ lookbackDays: 3 });
 
 const widget = new ChartWidget(container, {
   // Binance's public market data: history over REST, live bars over a WebSocket.
