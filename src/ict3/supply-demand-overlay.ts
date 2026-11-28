@@ -69,7 +69,7 @@ function drawStructureBreak(
   ctx.lineTo(endX, y);
   ctx.stroke();
   ctx.restore();
-  drawTag(ctx, event.label, endX + 4, y + (event.direction === 'bullish' ? -9 : 9), colors.text);
+  drawTag(ctx, event.label, endX + 4, y - 9, colors.text);
 }
 
 function drawZoneStepMarkers(
