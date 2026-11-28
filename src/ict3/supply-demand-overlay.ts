@@ -19,6 +19,7 @@ const STRUCTURE_COLORS: Record<StructureDirection, { line: string; text: string 
   bearish: { line: 'rgba(248, 113, 113, 0.62)', text: '#fecaca' },
 };
 const MAX_VISIBLE_STRUCTURE_BREAKS = 5;
+const STRUCTURE_LABEL_GAP = 6;
 const ACTIVE_PHASES: Record<ZonePhase, string> = {
   'awaiting-retest': 'WAITING RETEST',
   'awaiting-trigger': 'WAITING TRIGGER',
@@ -69,7 +70,7 @@ function drawStructureBreak(
   ctx.lineTo(endX, y);
   ctx.stroke();
   ctx.restore();
-  drawTag(ctx, event.label, endX + 4, y - 9, colors.text);
+  drawTag(ctx, event.label, endX + 4, y - 8 - STRUCTURE_LABEL_GAP, colors.text);
 }
 
 function drawZoneStepMarkers(
