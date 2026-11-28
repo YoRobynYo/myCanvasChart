@@ -7,12 +7,22 @@ export interface Candle {
 }
 
 export type ZoneSide = 'demand' | 'supply';
+export type StructureDirection = 'bullish' | 'bearish';
+export type StructureBreakLabel = 'BOS' | 'CHoCH';
 export type ZonePhase =
   | 'awaiting-retest'
   | 'awaiting-trigger'
   | 'awaiting-candidate'
   | 'trade-candidate'
   | 'invalidated';
+
+export interface StructureBreak {
+  index: number;
+  pivotIndex: number;
+  price: number;
+  direction: StructureDirection;
+  label: StructureBreakLabel;
+}
 
 export interface SupplyDemandZone {
   id: string;
@@ -27,6 +37,11 @@ export interface SupplyDemandZone {
   candidateIndex?: number;
   invalidatedIndex?: number;
   phase: ZonePhase;
+}
+
+export interface SupplyDemandAnalysis {
+  zones: SupplyDemandZone[];
+  structureBreaks: StructureBreak[];
 }
 
 export interface SupplyDemandOptions {
@@ -185,18 +200,22 @@ function findOpposingCandle(
  * not read or mutate Base, ICT 6, saved drawings, or any other layer's state.
  * The output is educational chart context only, never an order or instruction.
  */
-export function analyzeSupplyDemand(
+export function analyzeSupplyDemandWithStructure(
   bars: readonly Candle[],
   partialOptions: Partial<SupplyDemandOptions> = {},
-): SupplyDemandZone[] {
+): SupplyDemandAnalysis {
   const options = { ...DEFAULT_SUPPLY_DEMAND_OPTIONS, ...partialOptions };
-  if (bars.length < options.swingStrength * 2 + 3) return [];
+  if (bars.length < options.swingStrength * 2 + 3) return { zones: [], structureBreaks: [] };
 
   const zones: SupplyDemandZone[] = [];
+  const structureBreaks: StructureBreak[] = [];
   let lastSwingHigh: { index: number; price: number } | undefined;
   let lastSwingLow: { index: number; price: number } | undefined;
+  let trendDirection: StructureDirection | undefined;
   const brokenHighs = new Set<number>();
   const brokenLows = new Set<number>();
+  const zonedHighs = new Set<number>();
+  const zonedLows = new Set<number>();
 
   for (let index = 0; index < bars.length; index += 1) {
     const confirmedIndex = index - options.swingStrength;
@@ -256,9 +275,22 @@ export function analyzeSupplyDemand(
     const body = Math.abs(candle.close - candle.open);
     const displacement = atr > 0 && body >= atr * options.displacementAtrMultiple;
 
-    if (displacement && candle.close > candle.open && lastSwingHigh &&
-        candle.close > lastSwingHigh.price && !brokenHighs.has(lastSwingHigh.index)) {
+    if (lastSwingHigh && candle.close > lastSwingHigh.price && !brokenHighs.has(lastSwingHigh.index)) {
       brokenHighs.add(lastSwingHigh.index);
+      const direction: StructureDirection = 'bullish';
+      structureBreaks.push({
+        index,
+        pivotIndex: lastSwingHigh.index,
+        price: lastSwingHigh.price,
+        direction,
+        label: trendDirection === undefined || trendDirection === direction ? 'BOS' : 'CHoCH',
+      });
+      trendDirection = direction;
+    }
+
+    if (displacement && candle.close > candle.open && lastSwingHigh &&
+        candle.close > lastSwingHigh.price && !zonedHighs.has(lastSwingHigh.index)) {
+      zonedHighs.add(lastSwingHigh.index);
       const zoneIndex = findOpposingCandle(
         bars, index, lastSwingHigh.index, 'demand',
         options.outlierAtrPeriod, options.outlierRangeAtrMultiple,
@@ -277,9 +309,22 @@ export function analyzeSupplyDemand(
       }
     }
 
-    if (displacement && candle.close < candle.open && lastSwingLow &&
-        candle.close < lastSwingLow.price && !brokenLows.has(lastSwingLow.index)) {
+    if (lastSwingLow && candle.close < lastSwingLow.price && !brokenLows.has(lastSwingLow.index)) {
       brokenLows.add(lastSwingLow.index);
+      const direction: StructureDirection = 'bearish';
+      structureBreaks.push({
+        index,
+        pivotIndex: lastSwingLow.index,
+        price: lastSwingLow.price,
+        direction,
+        label: trendDirection === undefined || trendDirection === direction ? 'BOS' : 'CHoCH',
+      });
+      trendDirection = direction;
+    }
+
+    if (displacement && candle.close < candle.open && lastSwingLow &&
+        candle.close < lastSwingLow.price && !zonedLows.has(lastSwingLow.index)) {
+      zonedLows.add(lastSwingLow.index);
       const zoneIndex = findOpposingCandle(
         bars, index, lastSwingLow.index, 'supply',
         options.outlierAtrPeriod, options.outlierRangeAtrMultiple,
@@ -301,5 +346,15 @@ export function analyzeSupplyDemand(
 
   const latestTime = bars.at(-1)?.time ?? 0;
   const cutoff = latestTime - options.lookbackDays * 24 * 60 * 60 * 1000;
-  return zones.filter((zone) => bars[zone.startIndex].time >= cutoff);
+  return {
+    zones: zones.filter((zone) => bars[zone.startIndex].time >= cutoff),
+    structureBreaks: structureBreaks.filter((event) => bars[event.index].time >= cutoff),
+  };
+}
+
+export function analyzeSupplyDemand(
+  bars: readonly Candle[],
+  partialOptions: Partial<SupplyDemandOptions> = {},
+): SupplyDemandZone[] {
+  return analyzeSupplyDemandWithStructure(bars, partialOptions).zones;
 }

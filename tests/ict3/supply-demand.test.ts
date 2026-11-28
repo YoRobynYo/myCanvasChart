@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { analyzeSupplyDemand, type Candle } from '../../src/ict3/supply-demand.ts';
+import {
+  analyzeSupplyDemand,
+  analyzeSupplyDemandWithStructure,
+  type Candle,
+} from '../../src/ict3/supply-demand.ts';
 
 const options = {
   swingStrength: 1,
@@ -61,6 +65,36 @@ test('mirrors the swing-break zone rule for supply', () => {
   assert.equal(zone.breakIndex, 4);
   assert.equal(zone.low, 9.5);
   assert.equal(zone.high, 11.5);
+});
+
+test('labels the first confirmed swing break BOS and an opposite-direction break CHoCH', () => {
+  const bars = [
+    ...demandSetup(),
+    bar(5, 13, 14, 11, 12),
+    bar(6, 12, 13, 10, 11),
+    bar(7, 11, 12, 9, 10), // new swing low
+    bar(8, 10, 11, 9.5, 10.5),
+    bar(9, 10, 10.5, 8, 8.5), // bearish break of the new swing low
+  ];
+  const result = analyzeSupplyDemandWithStructure(bars, options);
+  assert.deepEqual(
+    result.structureBreaks.map(({ direction, label }) => ({ direction, label })),
+    [
+      { direction: 'bullish', label: 'BOS' },
+      { direction: 'bearish', label: 'CHoCH' },
+    ],
+  );
+  assert.deepEqual(result.structureBreaks.map(({ index }) => index), [4, 9]);
+});
+
+test('labels a close-through as structure even when displacement is too weak to form a zone', () => {
+  const result = analyzeSupplyDemandWithStructure(demandSetup(), {
+    ...options,
+    displacementAtrMultiple: 100,
+  });
+  assert.equal(result.structureBreaks.length, 1);
+  assert.equal(result.structureBreaks[0].label, 'BOS');
+  assert.equal(result.zones.length, 0);
 });
 
 test('searches the full pivot-to-break leg and avoids selecting an extreme-range candle when a normal opposing candle exists', () => {
