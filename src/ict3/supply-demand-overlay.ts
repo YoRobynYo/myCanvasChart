@@ -9,8 +9,9 @@ import {
 
 const FONT = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
 const RIGHT_EXTEND_BARS = 3;
-const SUPPLY = { fill: 'rgba(239, 68, 68, 0.06)', stroke: 'rgba(248, 113, 113, 0.42)', text: '#fecaca' };
-const DEMAND = { fill: 'rgba(16, 185, 129, 0.06)', stroke: 'rgba(52, 211, 153, 0.42)', text: '#a7f3d0' };
+// Use the user's requested visual convention: Supply boxes green, Demand boxes red.
+const SUPPLY = { fill: 'rgba(16, 185, 129, 0.06)', stroke: 'rgba(52, 211, 153, 0.42)', text: '#a7f3d0' };
+const DEMAND = { fill: 'rgba(239, 68, 68, 0.06)', stroke: 'rgba(248, 113, 113, 0.42)', text: '#fecaca' };
 const ACTIVE_PHASES: Record<ZonePhase, string> = {
   'awaiting-retest': 'WAITING RETEST',
   'awaiting-trigger': 'WAITING TRIGGER',
