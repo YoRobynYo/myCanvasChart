@@ -101,17 +101,29 @@ function drawZoneStepMarkers(
     if (step.index === undefined || step.index < scale.visible.from || step.index > scale.visible.to) continue;
     const candle = data[step.index];
     if (!candle || !isWithinLondonSession(candle.time)) continue;
+    const isTrigger = step.label === 'TRIGGER';
     const edgePrice = zone.side === 'supply' ? candle.high : candle.low;
     const edgeY = scale.priceToY(edgePrice);
     const x = scale.indexToX(step.index);
-    const pointY = edgeY + verticalDirection * 2;
+    const pointY = isTrigger
+      ? scale.priceToY(candle.close)
+      : edgeY + verticalDirection * 2;
+    ctx.save();
     ctx.beginPath();
     ctx.fillStyle = color;
-    ctx.arc(x, pointY, 3, 0, Math.PI * 2);
+    ctx.arc(x, pointY, isTrigger ? 4 : 3, 0, Math.PI * 2);
     ctx.fill();
+    if (isTrigger) {
+      ctx.strokeStyle = 'rgba(8, 12, 18, 0.95)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
     const labelWidth = Math.ceil(ctx.measureText(step.label).width + 10);
     const labelX = Math.max(2, x - labelWidth / 2);
-    const labelY = edgeY + verticalDirection * (14 + stepIndex * 14);
+    const labelY = isTrigger
+      ? scale.priceToY(candle.high) - 12
+      : edgeY + verticalDirection * (14 + stepIndex * 14);
     drawTag(ctx, step.label, labelX, labelY, color, placedLabels);
   }
 }
