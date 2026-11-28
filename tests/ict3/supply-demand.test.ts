@@ -5,6 +5,8 @@ import {
   analyzeSupplyDemandWithStructure,
   type Candle,
 } from '../../src/ict3/supply-demand.ts';
+import { isWithinLondonSession } from '../../src/ict3/session.ts';
+import { placeLabelTop } from '../../src/ict3/label-layout.ts';
 
 const options = {
   swingStrength: 1,
@@ -200,4 +202,23 @@ test('limits returned zones to ICT 3 own three-day lookback window', () => {
     candle.time = Date.UTC(2026, 0, 10) + index * 60_000;
   });
   assert.equal(analyzeSupplyDemand(currentSetup, optionsWithLookback(3)).length, 1);
+});
+
+test('uses the London 07:00–16:00 session and follows daylight-saving time', () => {
+  const winterDay = Date.UTC(2026, 0, 12);
+  assert.equal(isWithinLondonSession(winterDay + 6 * 60 * 60_000 + 59 * 60_000), false);
+  assert.equal(isWithinLondonSession(winterDay + 7 * 60 * 60_000), true);
+  assert.equal(isWithinLondonSession(winterDay + 15 * 60 * 60_000 + 59 * 60_000), true);
+  assert.equal(isWithinLondonSession(winterDay + 16 * 60 * 60_000), false);
+
+  const summerDay = Date.UTC(2026, 5, 12);
+  assert.equal(isWithinLondonSession(summerDay + 6 * 60 * 60_000), true);
+  assert.equal(isWithinLondonSession(summerDay + 15 * 60 * 60_000), false);
+});
+
+test('stacks overlapping chart tags vertically while leaving separated tags in place', () => {
+  const placed = [{ left: 20, top: 50, width: 40, height: 16 }];
+  assert.equal(placeLabelTop(25, 50, 35, 16, 200, placed), 31);
+  assert.equal(placeLabelTop(100, 50, 35, 16, 200, placed), 50);
+  assert.equal(placeLabelTop(20, 2, 40, 16, 60, [{ left: 20, top: 2, width: 40, height: 16 }]), 21);
 });

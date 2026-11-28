@@ -8,6 +8,8 @@ import {
   type SupplyDemandZone,
   type ZonePhase,
 } from './supply-demand.ts';
+import { placeLabelTop, type LabelBox } from './label-layout.ts';
+import { isWithinLondonSession } from './session.ts';
 
 const FONT = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
 const RIGHT_EXTEND_BARS = 3;
@@ -34,16 +36,20 @@ function drawTag(
   x: number,
   y: number,
   color: string,
+  placedLabels: LabelBox[],
 ): void {
   const paddingX = 5;
   const width = Math.ceil(ctx.measureText(text).width + paddingX * 2);
-  const top = Math.max(2, y - 8);
+  const height = 16;
+  const left = Math.max(2, Math.min(x, ctx.canvas.width - width - 2));
+  const top = placeLabelTop(left, y - 8, width, height, ctx.canvas.height, placedLabels);
+  placedLabels.push({ left, top, width, height });
   ctx.fillStyle = 'rgba(8, 12, 18, 0.9)';
-  ctx.fillRect(x, top, width, 16);
+  ctx.fillRect(left, top, width, height);
   ctx.fillStyle = color;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x + paddingX, top + 8);
+  ctx.fillText(text, left + paddingX, top + height / 2);
 }
 
 function phaseAnchor(zone: SupplyDemandZone): number {
@@ -55,6 +61,7 @@ function drawStructureBreak(
   event: StructureBreak,
   scale: ReturnType<typeof overlayScale>,
   visibleFrom: number,
+  placedLabels: LabelBox[],
 ): void {
   const colors = STRUCTURE_COLORS[event.direction];
   const startX = scale.indexToX(Math.max(event.pivotIndex, visibleFrom));
@@ -70,7 +77,9 @@ function drawStructureBreak(
   ctx.lineTo(endX, y);
   ctx.stroke();
   ctx.restore();
-  drawTag(ctx, event.label, endX + 4, y - 8 - STRUCTURE_LABEL_GAP, colors.text);
+  const labelWidth = Math.ceil(ctx.measureText(event.label).width + 10);
+  const labelX = (startX + endX - labelWidth) / 2;
+  drawTag(ctx, event.label, labelX, y - 8 - STRUCTURE_LABEL_GAP, colors.text, placedLabels);
 }
 
 function drawZoneStepMarkers(
@@ -79,6 +88,7 @@ function drawZoneStepMarkers(
   scale: ReturnType<typeof overlayScale>,
   data: readonly Candle[],
   color: string,
+  placedLabels: LabelBox[],
 ): void {
   const steps = [
     { index: zone.retestIndex, label: 'RETEST' },
@@ -90,7 +100,7 @@ function drawZoneStepMarkers(
     const step = steps[stepIndex];
     if (step.index === undefined || step.index < scale.visible.from || step.index > scale.visible.to) continue;
     const candle = data[step.index];
-    if (!candle) continue;
+    if (!candle || !isWithinLondonSession(candle.time)) continue;
     const edgePrice = zone.side === 'supply' ? candle.high : candle.low;
     const edgeY = scale.priceToY(edgePrice);
     const x = scale.indexToX(step.index);
@@ -102,7 +112,7 @@ function drawZoneStepMarkers(
     const labelWidth = Math.ceil(ctx.measureText(step.label).width + 10);
     const labelX = Math.max(2, x - labelWidth / 2);
     const labelY = edgeY + verticalDirection * (14 + stepIndex * 14);
-    drawTag(ctx, step.label, labelX, labelY, color);
+    drawTag(ctx, step.label, labelX, labelY, color, placedLabels);
   }
 }
 
@@ -128,6 +138,7 @@ function drawZone(
   scale: ReturnType<typeof overlayScale>,
   data: readonly Candle[],
   showStatus: boolean,
+  placedLabels: LabelBox[],
 ): void {
   const colors = zone.side === 'demand' ? DEMAND : SUPPLY;
   const visibleFrom = Math.max(0, Math.floor(scale.visible.from));
@@ -153,14 +164,14 @@ function drawZone(
   const sideLabel = zone.side === 'demand' ? 'DEMAND' : 'SUPPLY';
   const labelWidth = Math.ceil(ctx.measureText(sideLabel).width + 10);
   const labelX = startX + Math.max(0, (endX - startX - labelWidth) / 2);
-  drawTag(ctx, sideLabel, labelX, top + height / 2, colors.text);
+  drawTag(ctx, sideLabel, labelX, top + height / 2, colors.text, placedLabels);
 
-  if (showStatus) drawZoneStepMarkers(ctx, zone, scale, data, colors.text);
+  drawZoneStepMarkers(ctx, zone, scale, data, colors.text, placedLabels);
   if (!showStatus || zone.phase === 'invalidated' || zone.phase === 'trade-candidate') return;
   const anchorIndex = Math.min(phaseAnchor(zone), visibleTo);
   const anchorX = scale.indexToX(anchorIndex);
   const anchorY = top - 10;
-  drawTag(ctx, ACTIVE_PHASES[zone.phase], anchorX + 5, anchorY, colors.text);
+  drawTag(ctx, ACTIVE_PHASES[zone.phase], anchorX + 5, anchorY, colors.text, placedLabels);
 }
 
 export function createSupplyDemandOverlay(
@@ -180,11 +191,15 @@ export function createSupplyDemandOverlay(
 
       const candles = context.data as readonly Candle[];
       const analysis = analyzeSupplyDemandWithStructure(candles, layerOptions);
-      const zones = selectVisibleZones(analysis.zones);
+      const zones = selectVisibleZones(analysis.zones.filter((zone) => {
+        const breakCandle = candles[zone.breakIndex];
+        return breakCandle !== undefined && isWithinLondonSession(breakCandle.time);
+      }));
       const visibleFrom = Math.max(0, Math.floor(scale.visible.from));
       const visibleTo = Math.min(candles.length - 1, Math.ceil(scale.visible.to));
       const structureBreaks = analysis.structureBreaks
         .filter((event) => event.index >= visibleFrom && event.index <= visibleTo)
+        .filter((event) => isWithinLondonSession(candles[event.index]?.time ?? Number.NaN))
         .slice(-MAX_VISIBLE_STRUCTURE_BREAKS);
       const latestBySide = new Map<SupplyDemandZone['side'], SupplyDemandZone>();
       for (const zone of zones) {
@@ -194,11 +209,12 @@ export function createSupplyDemandOverlay(
       ctx.save();
       ctx.font = FONT;
       ctx.textBaseline = 'middle';
+      const placedLabels: LabelBox[] = [];
       for (const event of structureBreaks) {
-        drawStructureBreak(ctx, event, scale, visibleFrom);
+        drawStructureBreak(ctx, event, scale, visibleFrom, placedLabels);
       }
       for (const zone of zones) {
-        drawZone(ctx, zone, scale, candles, latestBySide.get(zone.side) === zone);
+        drawZone(ctx, zone, scale, candles, latestBySide.get(zone.side) === zone, placedLabels);
       }
       ctx.restore();
     },
