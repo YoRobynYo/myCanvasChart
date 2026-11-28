@@ -1,6 +1,7 @@
 import './style.css';
-import { BinanceAdapter, type SymbolInfo } from '@tradecanvas/chart';
+import { BinanceAdapter, registerPlugin, type SymbolInfo } from '@tradecanvas/chart';
 import { ChartWidget } from '@tradecanvas/chart/widget';
+import { IctBaseTest } from './ictBase';
 
 // The pairs the symbol search opens with. With names, kinds and exchanges the
 // search shows them in rows with tabs; plain tickers ('BTCUSDT') work too.
@@ -23,6 +24,9 @@ const WIDE_SCREEN_PX = 1024;
 const container = document.getElementById('chart');
 if (!container) throw new Error('index.html needs an element with id="chart"');
 
+// Register before the widget exists, so templates can restore the layer.
+registerPlugin({ kind: 'indicator', plugin: new IctBaseTest() });
+
 const widget = new ChartWidget(container, {
   // Binance's public market data: history over REST, live bars over a WebSocket.
   // No API key is needed. Swap in your own adapter or DataFeed here.
@@ -30,6 +34,7 @@ const widget = new ChartWidget(container, {
   symbol: 'BTCUSDT',
   timeframe: '15m',
   theme: 'dark',
+  indicatorTemplates: true,
   symbols: PAIRS,
   // The rows show live prices from the adapter's quotes stream.
   watchlist: {
