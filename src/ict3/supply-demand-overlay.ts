@@ -8,8 +8,9 @@ import {
 } from './supply-demand.ts';
 
 const FONT = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
-const SUPPLY = { fill: 'rgba(239, 68, 68, 0.11)', stroke: '#f87171', text: '#fecaca' };
-const DEMAND = { fill: 'rgba(16, 185, 129, 0.12)', stroke: '#34d399', text: '#a7f3d0' };
+const RIGHT_EXTEND_BARS = 3;
+const SUPPLY = { fill: 'rgba(239, 68, 68, 0.06)', stroke: 'rgba(248, 113, 113, 0.42)', text: '#fecaca' };
+const DEMAND = { fill: 'rgba(16, 185, 129, 0.06)', stroke: 'rgba(52, 211, 153, 0.42)', text: '#a7f3d0' };
 const ACTIVE_PHASES: Record<ZonePhase, string> = {
   'awaiting-retest': 'WAITING RETEST',
   'awaiting-trigger': 'WAITING TRIGGER',
@@ -42,20 +43,16 @@ function phaseAnchor(zone: SupplyDemandZone): number {
 
 function selectVisibleZones(zones: readonly SupplyDemandZone[]): SupplyDemandZone[] {
   const selected: SupplyDemandZone[] = [];
-  for (const side of ['demand', 'supply'] as const) {
-    const recent: SupplyDemandZone[] = [];
-    const candidates = zones.filter((zone) => zone.side === side).reverse();
-    for (const zone of candidates) {
-      const range = zone.high - zone.low;
-      const duplicates = recent.some((kept) => {
-        const overlap = Math.max(0, Math.min(zone.high, kept.high) - Math.max(zone.low, kept.low));
-        const smallerRange = Math.min(range, kept.high - kept.low);
-        return smallerRange > 0 && overlap / smallerRange >= 0.7;
-      });
-      if (!duplicates) recent.push(zone);
-      if (recent.length === 2) break;
-    }
-    selected.push(...recent);
+  for (const zone of [...zones].reverse()) {
+    const range = zone.high - zone.low;
+    const duplicates = selected.some((kept) => {
+      if (kept.side !== zone.side) return false;
+      const overlap = Math.max(0, Math.min(zone.high, kept.high) - Math.max(zone.low, kept.low));
+      const smallerRange = Math.min(range, kept.high - kept.low);
+      return smallerRange > 0 && overlap / smallerRange >= 0.7;
+    });
+    if (!duplicates) selected.push(zone);
+    if (selected.length === 5) break;
   }
   return selected.sort((a, b) => a.startIndex - b.startIndex);
 }
@@ -74,9 +71,8 @@ function drawZone(
 
   const terminalIndex = zone.candidateIndex ?? zone.invalidatedIndex;
   const startX = scale.indexToX(Math.max(zone.startIndex, visibleFrom));
-  const endX = terminalIndex === undefined
-    ? scale.indexToX(visibleTo) + scale.barWidth / 2
-    : scale.indexToX(Math.min(terminalIndex, visibleTo)) + scale.barWidth / 2;
+  const endIndex = Math.min(terminalIndex ?? visibleTo, visibleTo);
+  const endX = scale.indexToX(endIndex) + scale.barWidth / 2 + scale.barWidth * RIGHT_EXTEND_BARS;
   if (endX <= startX) return;
 
   const upperY = scale.priceToY(zone.high);
@@ -90,7 +86,9 @@ function drawZone(
   ctx.strokeRect(startX, top, endX - startX, height);
 
   const sideLabel = zone.side === 'demand' ? 'DEMAND' : 'SUPPLY';
-  drawTag(ctx, sideLabel, startX + 3, top + Math.min(height / 2, 10), colors.text);
+  const labelWidth = Math.ceil(ctx.measureText(sideLabel).width + 10);
+  const labelX = startX + Math.max(0, (endX - startX - labelWidth) / 2);
+  drawTag(ctx, sideLabel, labelX, top + height / 2, colors.text);
 
   if (!showStatus || zone.phase === 'invalidated') return;
   const anchorIndex = Math.min(phaseAnchor(zone), visibleTo);

@@ -32,19 +32,22 @@ export interface SupplyDemandZone {
 export interface SupplyDemandOptions {
   /** ICT 3's visibility window is independent from every other layer. */
   lookbackDays: number;
-  /** Confirmed pivots use this many completed bars on each side. */
+  /** Internal pivot strength: 2 means two completed candles on each side. */
   swingStrength: number;
   atrPeriod: number;
   displacementAtrMultiple: number;
-  zoneSearchBars: number;
+  /** Volatility reference used to avoid letting a single extreme candle dominate a zone. */
+  outlierAtrPeriod: number;
+  outlierRangeAtrMultiple: number;
 }
 
 export const DEFAULT_SUPPLY_DEMAND_OPTIONS: Readonly<SupplyDemandOptions> = {
   lookbackDays: 3,
   swingStrength: 2,
   atrPeriod: 14,
-  displacementAtrMultiple: 0.8,
-  zoneSearchBars: 12,
+  displacementAtrMultiple: 1,
+  outlierAtrPeriod: 200,
+  outlierRangeAtrMultiple: 2,
 };
 
 function trueRange(candle: Candle, previousClose?: number): number {
@@ -65,6 +68,16 @@ function averageTrueRange(bars: readonly Candle[], index: number, period: number
     count += 1;
   }
   return count > 0 ? total / count : 0;
+}
+
+function isExtremeRangeCandle(
+  bars: readonly Candle[],
+  index: number,
+  atrPeriod: number,
+  multiple: number,
+): boolean {
+  const atr = averageTrueRange(bars, index, atrPeriod);
+  return atr > 0 && trueRange(bars[index], index > 0 ? bars[index - 1].close : undefined) >= atr * multiple;
 }
 
 function isSwingHigh(bars: readonly Candle[], index: number, strength: number): boolean {
@@ -148,17 +161,23 @@ function findOpposingCandle(
   breakIndex: number,
   pivotIndex: number,
   side: ZoneSide,
-  searchBars: number,
+  outlierAtrPeriod: number,
+  outlierRangeAtrMultiple: number,
 ): number | undefined {
-  const first = Math.max(pivotIndex + 1, breakIndex - searchBars);
-  for (let index = breakIndex - 1; index >= first; index -= 1) {
+  let extremeFallback: number | undefined;
+  for (let index = breakIndex - 1; index > pivotIndex; index -= 1) {
     const candle = bars[index];
     const isOpposing = side === 'demand'
       ? candle.close < candle.open
       : candle.close > candle.open;
-    if (isOpposing && candle.high > candle.low) return index;
+    if (!isOpposing || candle.high <= candle.low) continue;
+    if (isExtremeRangeCandle(bars, index, outlierAtrPeriod, outlierRangeAtrMultiple)) {
+      extremeFallback ??= index;
+      continue;
+    }
+    return index;
   }
-  return undefined;
+  return extremeFallback;
 }
 
 /**
@@ -196,8 +215,8 @@ export function analyzeSupplyDemand(
       if (zone.phase === 'trade-candidate' || zone.phase === 'invalidated' || index <= zone.breakIndex) continue;
 
       const invalidated = zone.side === 'demand'
-        ? candle.close < zone.low
-        : candle.close > zone.high;
+        ? candle.low < zone.low
+        : candle.high > zone.high;
       if (invalidated) {
         zone.phase = 'invalidated';
         zone.invalidatedIndex = index;
@@ -241,7 +260,8 @@ export function analyzeSupplyDemand(
         candle.close > lastSwingHigh.price && !brokenHighs.has(lastSwingHigh.index)) {
       brokenHighs.add(lastSwingHigh.index);
       const zoneIndex = findOpposingCandle(
-        bars, index, lastSwingHigh.index, 'demand', options.zoneSearchBars,
+        bars, index, lastSwingHigh.index, 'demand',
+        options.outlierAtrPeriod, options.outlierRangeAtrMultiple,
       );
       if (zoneIndex !== undefined) {
         const source = bars[zoneIndex];
@@ -261,7 +281,8 @@ export function analyzeSupplyDemand(
         candle.close < lastSwingLow.price && !brokenLows.has(lastSwingLow.index)) {
       brokenLows.add(lastSwingLow.index);
       const zoneIndex = findOpposingCandle(
-        bars, index, lastSwingLow.index, 'supply', options.zoneSearchBars,
+        bars, index, lastSwingLow.index, 'supply',
+        options.outlierAtrPeriod, options.outlierRangeAtrMultiple,
       );
       if (zoneIndex !== undefined) {
         const source = bars[zoneIndex];

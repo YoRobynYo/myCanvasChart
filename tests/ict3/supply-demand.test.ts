@@ -6,7 +6,6 @@ const options = {
   swingStrength: 1,
   atrPeriod: 2,
   displacementAtrMultiple: 0.4,
-  zoneSearchBars: 8,
 };
 
 function bar(index: number, open: number, high: number, low: number, close: number, time = index * 60_000): Candle {
@@ -61,6 +60,21 @@ test('mirrors the swing-break zone rule for supply', () => {
   assert.equal(zone.startIndex, 2);
   assert.equal(zone.breakIndex, 4);
   assert.equal(zone.low, 9.5);
+  assert.equal(zone.high, 11.5);
+});
+
+test('searches the full pivot-to-break leg and avoids selecting an extreme-range candle when a normal opposing candle exists', () => {
+  const bars = [
+    bar(0, 9, 10, 8, 9),
+    bar(1, 10, 12, 9.8, 11.5), // confirmed swing high
+    bar(2, 11, 11.5, 10.5, 10.8), // ordinary opposing candle
+    bar(3, 12, 16, 8, 9), // extreme-range opposing candle
+    bar(4, 10, 18, 9.5, 17.5), // closes through the confirmed swing high
+  ];
+  const zone = analyzeSupplyDemand(bars, options)[0];
+  assert.ok(zone);
+  assert.equal(zone.startIndex, 2);
+  assert.equal(zone.low, 10.5);
   assert.equal(zone.high, 11.5);
 });
 
@@ -131,8 +145,8 @@ test('accepts a qualifying long upper wick as a supply trigger', () => {
   assert.equal(zone?.candidateIndex, 7);
 });
 
-test('invalidates a demand zone when a later candle closes through its far edge', () => {
-  const bars = [...demandSetup(), bar(5, 10, 10.2, 8.8, 9.2)];
+test('mitigates a demand box when a later wick crosses its far edge, even if the candle closes back inside', () => {
+  const bars = [...demandSetup(), bar(5, 10, 10.2, 9.4, 10.1)];
   const zone = analyzeSupplyDemand(bars, options)[0];
   assert.equal(zone?.phase, 'invalidated');
   assert.equal(zone?.invalidatedIndex, 5);
