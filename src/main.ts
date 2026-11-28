@@ -6,6 +6,7 @@ import {
   type SymbolInfo,
 } from '@tradecanvas/chart';
 import { ChartWidget } from '@tradecanvas/chart/widget';
+import { createSupplyDemandOverlay } from './ict3/supply-demand-overlay.ts';
 
 // The pairs the symbol search opens with. With names, kinds and exchanges the
 // search shows them in rows with tabs; plain tickers ('BTCUSDT') work too.
@@ -30,6 +31,7 @@ if (!container) throw new Error('index.html needs an element with id="chart"');
 // A visible, price-anchored proof that an ICT layer can render text on the chart.
 // The label follows the latest visible candle as the user pans or zooms.
 let baseLayerEnabled = false;
+let ict3LayerEnabled = false;
 let dropdownObserver: MutationObserver | undefined;
 const baseLayerOverlay: OverlayPlugin = {
   descriptor: {
@@ -72,6 +74,7 @@ const baseLayerOverlay: OverlayPlugin = {
     ctx.restore();
   },
 };
+const ict3SupplyDemandOverlay = createSupplyDemandOverlay();
 
 const widget = new ChartWidget(container, {
   // Binance's public market data: history over REST, live bars over a WebSocket.
@@ -93,6 +96,8 @@ const widget = new ChartWidget(container, {
   onReady: (chart, w) => {
     chart.addIndicator('ema', { period: 50 });
     chart.addIndicator('rsi', { period: 14 });
+    chart.plugins.register({ kind: 'overlay', plugin: ict3SupplyDemandOverlay });
+    // Keep the Base proof label on top if its price point overlaps an ICT 3 zone.
     chart.plugins.register({ kind: 'overlay', plugin: baseLayerOverlay });
 
     const ictDropdown = w.addToolbarDropdown({
@@ -108,6 +113,15 @@ const widget = new ChartWidget(container, {
           onSelect: () => {
             baseLayerEnabled = !baseLayerEnabled;
             baseLayerOverlay.enabled = baseLayerEnabled;
+            chart.requestRender();
+          },
+        },
+        {
+          label: 'ICT 3 — Supply and Demand',
+          checked: ict3LayerEnabled,
+          onSelect: () => {
+            ict3LayerEnabled = !ict3LayerEnabled;
+            ict3SupplyDemandOverlay.enabled = ict3LayerEnabled;
             chart.requestRender();
           },
         },

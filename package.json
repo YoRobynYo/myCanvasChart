@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "node --experimental-strip-types --test tests/ict3/supply-demand.test.ts"
   },
   "dependencies": {
     "@tradecanvas/chart": "^2.11.1"
